@@ -18,7 +18,7 @@ int main(void)
 {
     int j = 14;
     int remain_length;
-
+    long long reach_time = 0;
     while (1)
     {
         int clk = sys_get_tick();
@@ -43,6 +43,11 @@ int main(void)
                 if (remain_length) remain_length--;
                 sys_set_sche_workload(remain_length);
             }
+            if(remain_length == 0){
+                    reach_time++;
+                    sys_move_cursor(0, 28);
+                    printf("[fly4] reach time: %d.",reach_time);
+                }
         }
         // sys_yield();
         sys_move_cursor(0, j);

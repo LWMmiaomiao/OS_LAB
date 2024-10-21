@@ -1,5 +1,3 @@
-/*  Author: Xianan Zhu  */
-/*     for p1-task5     */
 
 #ifndef __INCLUDE_PIPE_H__
 #define __INCLUDE_PIPE_H__
