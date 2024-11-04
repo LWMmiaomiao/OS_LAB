@@ -97,9 +97,10 @@ typedef struct pcb
 	uint64_t wakeup_time;
 
 	/* mutex and mailbox index */
-	int mlock_idx;
 	int mbox_idx;
 
+	int run_cpu_id; // 运行在哪个cpu上
+	int cpu_mask; // 绑定cpu的掩码
 } pcb_t;
 
 /* ready queue to run */
@@ -110,6 +111,7 @@ extern list_head sleep_queue;
 
 /* current running task PCB */
 register pcb_t * current_running asm("tp");
+// pcb_t * volatile current_running[NR_CPUS];
 extern pid_t process_id[NR_CPUS];
 
 extern pcb_t pcb[NUM_MAX_TASK]; 	// pid from 1 to 16
@@ -132,9 +134,12 @@ extern pid_t do_exec(char *name, int argc, char *argv[]);
 #endif
 extern void do_exit(void);
 extern int do_kill(pid_t pid);
+extern int do_kill_itself(pid_t pid);
 extern int do_waitpid(pid_t pid);
 extern void do_process_show();
 extern pid_t do_getpid();
+extern void do_taskset_pid(int mask, pid_t pid);
+extern void do_taskset_name(int mask, char *name);
 /************************************************************/
 
 #endif

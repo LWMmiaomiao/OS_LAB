@@ -29,13 +29,16 @@
 #define INCLUDE_LOCK_H_
 #include <os/list.h>
 
-void init_ipc(void);
-
 #define LOCK_NUM 16
 
 #define UNLOCKED 0
 #define LOCKED 1
 typedef uint32_t lock_status_t;
+
+typedef enum {
+    UNUSED,
+    USING,
+} use_status_t;
 
 typedef struct spin_lock
 {
@@ -47,6 +50,8 @@ typedef struct mutex_lock
 	spin_lock_t lock;
 	list_head block_queue;
 	int key;
+	int pid; // 该互斥锁正在被哪个进程持有
+	use_status_t usage; // 记录是否被使用
 } mutex_lock_t;
 
 void init_locks(void);
@@ -57,8 +62,9 @@ void spin_lock_acquire(spin_lock_t *lock);
 void spin_lock_release(spin_lock_t *lock);
 
 int do_mutex_lock_init(int key);
-void do_mutex_lock_acquire(int mlock_idx);	// atomic
-void do_mutex_lock_release(int mlock_idx);	// atomic
+void do_mutex_lock_acquire(int mlock_idx); // atomic
+void do_mutex_lock_release(int mlock_idx); // atomic
+void do_mutex_lock_release_bypid(pid_t pid); // 在kill中使用
 
 /************************************************************/
 
@@ -71,6 +77,7 @@ typedef struct barrier
 	int key;
 	unsigned goal;
 	unsigned arrived;
+	use_status_t usage; // 记录是否被使用
 } barrier_t;
 
 void init_barriers(void);
@@ -86,7 +93,7 @@ typedef struct condition
 	// TODO [P3-TASK2 condition]
 	list_head block_queue;
 	int key;
-	bool status;
+	use_status_t usage; // 记录是否被使用
 } condition_t;
 
 void init_conditions(void);
@@ -109,7 +116,6 @@ void do_semaphore_up(int sema_idx);
 void do_semaphore_down(int sema_idx);
 void do_semaphore_destroy(int sema_idx);
 
-
 #define MBOX_NUM 16
 
 #define MAX_MBOX_LENGTH (64)
@@ -117,13 +123,14 @@ void do_semaphore_destroy(int sema_idx);
 
 typedef struct mailbox
 {
-    	// TODO [P3-TASK2 mailbox]
+    // TODO [P3-TASK2 mailbox]
 	char name[MAX_MBOX_NAME];
 	int ref_cnt;
 	list_head send_block_queue;
 	list_head rev_block_queue;
 	uint8_t msg_array[MAX_MBOX_LENGTH];
-	int head,tail;
+	int wcur;    // 写指针，指向首个空闲块
+    int rcur;    // 读指针，记录下一个要读的位置
 	int remain_length;
 } mailbox_t;
 

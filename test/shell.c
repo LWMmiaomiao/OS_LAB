@@ -33,6 +33,7 @@
 #include <ctype.h>
 
 #define SHELL_BEGIN 20
+#define CMDLINE_LENTH 256
 
 #define MAX_ARGS 10
 #define ARG_NAME 20
@@ -43,7 +44,8 @@ enum cmdtype
 	PS,
 	EXEC,
 	KILL,
-	CLEAR
+	CLEAR,
+	TASKSET
 };
 
 typedef struct CMD
@@ -53,7 +55,7 @@ typedef struct CMD
 	char *argv[MAX_ARGS];
 }CMD;
 
-char cmdstr[256];
+char cmdstr[CMDLINE_LENTH];
 char args[MAX_ARGS][ARG_NAME];
 CMD cmd; 
 
@@ -64,37 +66,54 @@ int main(void)
 {
 	sys_move_cursor(0, SHELL_BEGIN);
 	printf("------------------- COMMAND -------------------\n");
+	//que1: cmd.argv里可能是错误数据必须清空，否则有可能会报错
 	for(int i = 0; i < MAX_ARGS; i++)
 	{
-		cmd.argv[i] = args[i];
+		cmd.argv[i] = "\0";
 	}
-	// printf("> root@UCAS_OS: ");
+	int shell_pid = 1;// 支持shell实现kill自身
+
 	while (1)
 	{
 		// TODO [P3-task1]: call syscall to read UART port
 		getcmdline();
+		int mask;
+		pid_t setpid;
+		
 		if(cmdstr[0] != '\n' && cmdstr[0] != '\0')
 		{
 			gettoken();
 			switch (cmd.type)
 			{
 			case PS:
-				if(cmd.argc != 0)
-					printf("ERROR\n");
-				else
-					sys_ps();
+				if(cmd.argc > 0)
+					printf("WARNING:TOO MANY ARGUS!\n");
+				sys_ps();
 				break;
 			case KILL:
-				if(cmd.argc != 1)
-					printf("ERROR\n");
-				else
-					sys_kill(atoi(args[0]));
+				if(cmd.argc > 1)
+					printf("WARNING:TOO MANY ARGUS!\n");
+				else if(cmd.argc < 1){
+					printf("WARNING:TOO LITTLE ARGUS!\n");
+					break;
+				}
+				int kill_pid = atoi(args[0]);
+				if(kill_pid == shell_pid){ //shell kill itself
+					sys_clear();
+					sys_move_cursor(0, SHELL_BEGIN);
+					printf("Now shell will kill itself!Enter 'r' to reload shell!\n");
+					sys_kill_itself(shell_pid);
+				}
+				else{
+					sys_kill(kill_pid);
+				}
 				break;
 			case CLEAR:
-				if(cmd.argc != 0)
-					printf("ERROR\n");
-				else
-					sys_clear();
+				if(cmd.argc > 0)
+					printf("WARNING:TOO MANY ARGUS!\n");
+				sys_clear();
+				sys_move_cursor(0, SHELL_BEGIN);
+				printf("------------------- COMMAND -------------------\n");
 				break;
 			case EXEC:
 				if(cmd.argc == 0)
@@ -111,6 +130,19 @@ int main(void)
 						pid = sys_exec(args[0], cmd.argc, (char **)cmd.argv);
 						sys_waitpid(pid);
 					}
+				}
+				break;
+			case TASKSET:
+				if(strcmp(args[0],"-p") == 0) {
+					mask = atoi(args[1]);
+					setpid = atoi(args[2]);
+					printf("taskset_pid mask %d setpid %d\n", mask, setpid);
+					sys_taskset_pid(mask, setpid);
+				}
+				else {
+					mask = atoi(args[0]);
+					printf("taskset_name mask %d name %s\n", mask, args[1]);
+					sys_taskset_name(mask, (char *)args[1]);
 				}
 				break;
 			default: printf("Unknown command\n");break;
@@ -133,10 +165,32 @@ int main(void)
 void getcmdline()
 {
 	printf("> root@UCAS_OS: ");
-	gets(cmdstr);
+	int c, i = 0;
+	int preIsBlank = 0; // 提前处理使命令行参数间只有一个空格
+    while(i < CMDLINE_LENTH - 1 && (c=getchar()) != '\n' && c != '\r' && c != -1)
+    {
+        // if(c == ' '){
+        // 	if(preIsBlank){
+        // 		continue;
+        // 	}
+        // 	preIsBlank = 1;
+        // }
+        // else{
+        // 	preIsBlank = 0;
+        // }
+        if(c == ' ' && preIsBlank){
+            continue;
+        }
+        preIsBlank = c == ' ';
+        cmdstr[i++] = c;
+    }
+    if(i > 0 && cmdstr[i-1] == ' '){
+        i--;
+    }
+    cmdstr[i] = 0;
 }
 
-void gettoken(void)
+void gettoken(void)// 以空格为分隔读取命令行参数
 {
 	char token[32];
 	int start,end;
@@ -155,6 +209,8 @@ void gettoken(void)
 			cmd.type = KILL;
 		else if(strcmp(token,"clear") == 0)
 			cmd.type = CLEAR;
+		else if(strcmp(token,"taskset") == 0)
+			cmd.type = TASKSET;
 		else
 			cmd.type = UNKNOWN;
 
@@ -197,6 +253,8 @@ void gettoken(void)
 			cmd.type = KILL;
 		else if(strcmp(token,"clear") == 0)
 			cmd.type = CLEAR;
+		else if(strcmp(token,"taskset") == 0)
+			cmd.type = TASKSET;
 		else
 			cmd.type = UNKNOWN;
 		cmd.argc = 0;

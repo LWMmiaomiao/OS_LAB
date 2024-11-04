@@ -36,7 +36,6 @@ int main()
 	int max = i;
 	for(i=0;i<max;i++)
 	{
-		//测试程序最多只有10个单词，所以假装这里有一个itoa
 		if(i==9)
 			bp_putstr("10: ");
 		else  
@@ -50,7 +49,7 @@ int main()
 		bp_putchar('\n');
 		bp_putchar('\r');
 	}
-	bp_putstr("Xianan Zhu\n\r");
+	bp_putstr("GZY\n\r");
 	
 	return 0;
 }

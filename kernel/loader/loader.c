@@ -23,8 +23,7 @@ uint64_t load_task_img_by_name(char * str)
 	{
 		if(strcmp(tasks[i].filename,str)==0)
 		{
-			bios_sd_read((TASK_MEM_BASE + i * TASK_SIZE),tasks[i].block_num,tasks[i].block_id);
-			return (TASK_MEM_BASE + i * TASK_SIZE);
+			return load_task_img(i);
 		}
 	}
 	return 0;

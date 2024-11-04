@@ -6,11 +6,13 @@
 #include <os/irq.h>
 
 spin_lock_t slock;
+int cpu_id;
 
 void smp_init()
 {
 	/* TODO: P3-TASK3 multicore*/
 	// init tp
+	atomic_swap(UNLOCKED, (ptr_t)&slock.status); // 初始化内核自旋锁
 	pid0_pcb[get_current_cpu_id()].status = TASK_RUNNING;
 	current_running = &pid0_pcb[get_current_cpu_id()];		// current running is kernel
 	process_id[get_current_cpu_id()] = pid0_pcb[get_current_cpu_id()].pid;
@@ -21,7 +23,7 @@ void smp_init()
 void wakeup_other_hart()
 {
 	/* TODO: P3-TASK3 multicore*/
-	const unsigned long hart_mask = CORE_ONE;
+	const unsigned long hart_mask = CORE_ONE_MASK;
 	send_ipi(&hart_mask);
 }
 

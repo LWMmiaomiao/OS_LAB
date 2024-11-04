@@ -6,7 +6,7 @@
 #include <os/loader.h>
 #include <os/irq.h>
 #include <os/sched.h>
-#include <os/exec.h>		//for p3-task1
+#include <os/exec.h>
 #include <os/list.h>
 #include <os/lock.h>
 #include <os/kernel.h>
@@ -49,11 +49,8 @@ static void init_jmptab(void)
     	jmptab[MUTEX_INIT]      = (volatile long (*)())do_mutex_lock_init;
     	jmptab[MUTEX_ACQ]       = (volatile long (*)())do_mutex_lock_acquire;
     	jmptab[MUTEX_RELEASE]   = (volatile long (*)())do_mutex_lock_release;
-
-	// TODO: [p2-task1] (S-core) initialize system call table.
-	jmptab[WRITE]		= (volatile long (*)())screen_write;
-	jmptab[REFLUSH]		= (volatile long (*)())screen_reflush;
-
+		jmptab[WRITE]		= (volatile long (*)())screen_write;
+		jmptab[REFLUSH]		= (volatile long (*)())screen_reflush;
 }
 
 static void init_task_info(void)
@@ -73,20 +70,19 @@ static void init_pcb_stack(
     ptr_t kernel_stack, ptr_t user_stack, ptr_t entry_point,
     pcb_t *pcb, int argc, char **argv)
 {
-	// P3, pass parameter to the user stack
-	ptr_t argv_base;
-	ptr_t usp;
-	argv_base = user_stack - sizeof(char *) * argc;
-	user_stack = argv_base;
-	usp = argv_base;
+	// p3
+	user_stack -= sizeof(char *) * argc;
+	ptr_t argv_base = user_stack;
+	ptr_t usp = user_stack;
 	for(int i = 0; i < argc; i++)
 	{
-		user_stack = user_stack - (strlen(argv[i]) + 1);
-		strcpy((char *)user_stack,argv[i]);
+		user_stack -= (strlen(argv[i]) + 1);
+		strcpy((char *)user_stack, argv[i]);
+		//que:*(char **)usp = (char *)&user_stack;会出bug
 		memcpy((uint8_t *)usp, (const uint8_t *)&user_stack, sizeof(char *));
 		usp += sizeof(char *);
 	}
-	user_stack = user_stack & 0xffffffffffffff80;
+	user_stack = user_stack & 0xffffffffffffff80;//128bits align
 
 	/* TODO: [p2-task3] initialization of registers on kernel stack
 	* HINT: sp, ra, sepc, sstatus
@@ -127,8 +123,6 @@ static void init_pcb_stack(
 	pt_switchto->regs[11] = 0;
 	pt_switchto->regs[12] = 0;
 	pt_switchto->regs[13] = 0;
-
-
 }
 
 
@@ -142,7 +136,7 @@ int add_new_task(char * str, int argc, char *argv[], int pid)
 	{
 		kernel_stack = allocKernelStack(3);
 		usr_stack = allocUserStack(3);
-		init_pcb_stack(kernel_stack, usr_stack, entrypoint, &pcb[pid-1],argc,argv);
+		init_pcb_stack(kernel_stack, usr_stack, entrypoint, &pcb[pid-1], argc, argv);
 		pcb[pid-1].status = TASK_READY;
 		return 0;
 	}
@@ -165,9 +159,10 @@ static void init_pcb(void)
 		pcb[i].list.pcb_ptr = (ptr_t)&pcb[i];
 		pcb[i].wait_list.next = &pcb[i].wait_list;
 		pcb[i].wait_list.prev = &pcb[i].wait_list;
-		pcb[i].status = TASK_EXITED;			// useless?
-		pcb[i].mlock_idx = -1;
+		pcb[i].status = TASK_EXITED;
 		pcb[i].mbox_idx = -1;
+		pcb[i].run_cpu_id = -1;
+        pcb[i].cpu_mask = 0x03;
 	}
 
 	/* TODO: [p2-task1] remember to initialize 'current_running' */
@@ -176,12 +171,7 @@ static void init_pcb(void)
 	current_running = &pid0_pcb[current_cpuid];		// current running is kernel
 	process_id[current_cpuid] = pid0_pcb[current_cpuid].pid;
 
-
 	add_new_task("shell",0,NULL,1);
-	//add_new_task("add",0,NULL,2);
-
-	
-
 	allocReadyProcess();
 
 }
@@ -206,6 +196,9 @@ static void init_syscall(void)
 	syscall[SYSCALL_EXIT]		= (long (*)())do_exit;
 	syscall[SYSCALL_CLEAR]		= (long (*)())screen_clear;
 	syscall[SYSCALL_KILL]		= (long (*)())do_kill;
+	syscall[SYSCALL_KILL_ITSELF]= (long (*)())do_kill_itself;
+	syscall[SYSCALL_TASKSET_PID]		= (long (*)())do_taskset_pid;
+	syscall[SYSCALL_TASKSET_NAME]		= (long (*)())do_taskset_name;
 	syscall[SYSCALL_GETPID]		= (long (*)())do_getpid;
 	syscall[SYSCALL_WAITPID] 	= (long (*)())do_waitpid;
 	syscall[SYSCALL_BARR_INIT]	= (long (*)())do_barrier_init;
@@ -223,7 +216,7 @@ static void init_syscall(void)
 }
 
 /************************************************************/
-
+volatile int init_ok = 0; // 主核完成所有初始化后从核才能启动, 防止从核提前启动导致出错
 int main(void)
 {
 	if(get_current_cpu_id() == 0)
@@ -246,7 +239,10 @@ int main(void)
 		time_base = bios_read_fdt(TIMEBASE);
 
 		// Init lock mechanism o(´^｀)o
-		init_ipc();
+		init_locks();
+		init_barriers();
+		init_conditions();
+		init_mbox();
 		printk("> [INIT] Lock mechanism initialization succeeded.\n");
 
 		// Init interrupt (^_^)
@@ -261,41 +257,26 @@ int main(void)
 		init_screen();
 		// printk("> [INIT] SCREEN initialization succeeded.\n");
 
-		wakeup_other_hart();
-
+		init_ok = 1;
+		wakeup_other_hart();		
 		printl("core 0\n");
 
 	}
 	else
 	{
+		while(!init_ok)
+			; // 主核完成所有初始化后从核才能启动, 防止从核提前启动导致出错
 		smp_init();
 		printl("core 1\n");
 	}
-
-	/*
-	do_sleep(2);
-
-	screen_clear();
-
-	getTask();
-
-	allocReadyProcess();
-
-	do_sleep(2);
-
-	screen_clear();
-	*/
-
 
 	// TODO: [p2-task4] Setup timer interrupt and 
 	// enable all interrupt globally
 	// NOTE: The function of sstatus.sie is different from sie's
 
-	//enable_interrupt();
-
 	bios_set_timer(get_ticks() + TIMER_INTERVAL);
 
-
+	int ch;
 	// Infinite while loop, where CPU stays in a low-power state (QAQQQQQQQQQQQ)
 	while (1)
 	{
@@ -305,6 +286,13 @@ int main(void)
 		// If you do preemptive scheduling, they're used to enable CSR_SIE and wfi
 		enable_preempt();
 		asm volatile("wfi");
+		//que：如果shell在kill掉自身后，应当设计从main里再读入命令重启shell
+		//TO DO :P3 额外考虑
+		// ch = bios_getchar();
+        // if(ch == 'r'){
+        // 	add_new_task("shell",0,NULL,1);
+		// 	allocReadyProcess();
+        // }
 	}
 
 	return 0;

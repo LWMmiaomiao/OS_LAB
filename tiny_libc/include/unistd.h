@@ -38,8 +38,11 @@ pid_t  sys_exec(char *name, int argc, char **argv);
 
 void sys_exit(void);
 int  sys_kill(pid_t pid);
+int  sys_kill_itself(pid_t pid);
 int  sys_waitpid(pid_t pid);
 pid_t sys_getpid();
+void sys_taskset_pid(int mask, pid_t pid);
+void sys_taskset_name(int mask, char *name);
 
 
 /* TODO: [P3 task2] barrier */ 

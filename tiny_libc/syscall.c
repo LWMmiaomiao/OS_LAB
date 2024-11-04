@@ -129,6 +129,18 @@ int  sys_kill(pid_t pid)
 	/* TODO: [p3-task1] call invoke_syscall to implement sys_kill */
 	invoke_syscall(SYSCALL_KILL, (long)pid, 0, 0, 0, 0);
 }
+int  sys_kill_itself(pid_t pid)
+{
+	/* TODO: [p3-task1] call invoke_syscall to implement sys_kill_itself */
+	invoke_syscall(SYSCALL_KILL_ITSELF, (long)pid, 0, 0, 0, 0);
+}
+void sys_taskset_pid(int mask, pid_t pid){
+	invoke_syscall(SYSCALL_TASKSET_PID, (long)mask, (long)pid, 0, 0, 0);
+}
+
+void sys_taskset_name(int mask, char *name){
+	invoke_syscall(SYSCALL_TASKSET_NAME, (long)mask, (long)name, 0, 0, 0);
+}
 
 int  sys_waitpid(pid_t pid)
 {

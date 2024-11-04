@@ -2,7 +2,8 @@
 #define SMP_H
 
 #define NR_CPUS 2
-#define CORE_ONE 2
+#define CORE_ONE_MASK 2
+extern int cpu_id;
 extern void smp_init();
 extern void wakeup_other_hart();
 extern uint64_t get_current_cpu_id();

@@ -12,8 +12,10 @@
 pcb_t pcb[NUM_MAX_TASK];
 const ptr_t pid0_stack[NR_CPUS] = {INIT_KERNEL_STACK - PAGE_SIZE, INIT_KERNEL_STACK + PAGE_SIZE};
 pcb_t pid0_pcb[NR_CPUS] = {
-	{.pid = 0,.kernel_sp = INIT_KERNEL_STACK - PAGE_SIZE,.user_sp = INIT_KERNEL_STACK - PAGE_SIZE},
-	{.pid = 0,.kernel_sp = INIT_KERNEL_STACK + PAGE_SIZE,.user_sp = INIT_KERNEL_STACK + PAGE_SIZE}
+	{.pid = 0,.kernel_sp = INIT_KERNEL_STACK - PAGE_SIZE,.user_sp = INIT_KERNEL_STACK - PAGE_SIZE,
+	.run_cpu_id = 0, .cpu_mask = 0x01},
+	{.pid = 0,.kernel_sp = INIT_KERNEL_STACK + PAGE_SIZE,.user_sp = INIT_KERNEL_STACK + PAGE_SIZE,
+	.run_cpu_id = 1, .cpu_mask = 0x02}
 };
 
 LIST_HEAD(ready_queue);
@@ -35,14 +37,15 @@ void do_scheduler(void)
 	// TODO: [p2-task1] Modify the current_running pointer.
 	int current_cpuid = get_current_cpu_id();
 	pcb_t * prev_process = current_running;
-	if(current_running->status == TASK_RUNNING)
+	prev_process->run_cpu_id = -1;
+	if(prev_process->status == TASK_RUNNING)
 	{
-		current_running->status = TASK_READY;
+		prev_process->status = TASK_READY;
 
 		// Round Robin
-		if(current_running != &pid0_pcb[current_cpuid])
+		if(prev_process != &pid0_pcb[current_cpuid])
 		{
-			addToQueue(&current_running->list, &ready_queue);
+			addToQueue(&prev_process->list, &ready_queue);
 		}
 	}
 	
@@ -50,8 +53,7 @@ void do_scheduler(void)
 	current_running = (pcb_t *)getProcess();
 	process_id[current_cpuid] = current_running->pid;
 	current_running->status = TASK_RUNNING;
-	if(process_id[current_cpuid] != 0)
-		deleteNode(ready_queue.next);
+	current_running->run_cpu_id = current_cpuid;
 
 	bios_set_timer(get_ticks() + TIMER_INTERVAL);	// set timer interrupt
 
@@ -101,37 +103,30 @@ void do_unblock(list_node_t *pcb_node)
 
 void do_process_show()
 {
-	int i;
-	int j = 0;
-	int has_process = 0;
-	for(i = 0; i < NUM_MAX_TASK; i++)
-	{
-		if(pcb[i].status != TASK_EXITED)
-		{
-			if(has_process == 0)
-			{
-				printk("[Process Table]:\n");
-				has_process = 1;
-			}
-			printk("[%d] PID: %d ",j,pcb[i].pid);
-			j++;
-			if(pcb[i].status == TASK_RUNNING)
-				printk("STATUS: %s\n","TASK_RUNNING");
-			else if(pcb[i].status == TASK_BLOCKED)
-				printk("STATUS: %s\n","TASK_BLOCKED");
-			else if(pcb[i].status == TASK_READY)
-				printk("STATUS: %s\n","TASK_READY");
+    static char *state_str[4]={
+        "BLOCKED","RUNNING","READY","EXITED"
+    };
+    printk("[Process Table]:\n");
+    for(int i = 0, j = 0; i < NUM_MAX_TASK; i++){
+        if(pcb[i].status == TASK_EXITED){
+            continue;
 		}
-	}
-	if(has_process == 0)
-	{
-		printk("Huh? There is no process?");
-	}
+        else if(pcb[i].status == TASK_RUNNING){
+            printk("[%d] PID : %d  STATUS : %s mask : 0x%x Running on core %d\n", j, pcb[i].pid, state_str[pcb[i].status], pcb[i].cpu_mask, pcb[i].run_cpu_id);
+			j++;
+		}
+		else{
+            printk("[%d] PID : %d  STATUS : %s mask : 0x%x\n", j, pcb[i].pid, state_str[pcb[i].status], pcb[i].cpu_mask);
+			j++;
+		}
+		printl("[%d] PID : %d  STATUS : %s mask : 0x%x\n", j, pcb[i].pid, state_str[pcb[i].status], pcb[i].cpu_mask);
+    }
 }
 
 pid_t do_getpid()
 {
 	return current_running->pid;
+	//return current_running[cpu_id]->pid;
 }
 
 pid_t do_exec(char *name, int argc, char **argv)
@@ -143,11 +138,13 @@ pid_t do_exec(char *name, int argc, char **argv)
 		if(pcb[i].status == TASK_EXITED)
 		{		
 			pid = i + 1;	
-			if(add_new_task(name,argc,argv,pid) == -1)
+			if(add_new_task(name, argc, argv, pid) == -1)
 			{
 				printl("Error: In function do_exec, cannot load task called %s\n",name);
 				return 0;
-			}			
+			}
+			pcb[pid - 1].cpu_mask = current_running->cpu_mask;
+			printl("TEST POINT: name : %s pid : %d cpu_mask : %d curpid : %d\n",name, pid, pcb[pid].cpu_mask, current_running->pid);
 			addToQueue(&pcb[i].list,&ready_queue);
 			break;
 		}
@@ -170,12 +167,25 @@ int do_kill(pid_t pid)
 		deleteNode(&pcb[pid - 1].list);
 		pcb[pid - 1].status = TASK_EXITED;
 		freeQueueToReady(&pcb[pid - 1].wait_list);
-		if(pcb[pid-1].mlock_idx != -1)
-			do_mutex_lock_release(pcb[pid-1].mlock_idx);
+		// que :释放锁的逻辑需要改变，应该是每个锁持有进程的pid
+		do_mutex_lock_release_bypid(pid);
+		// if(pcb[pid-1].mlock_idx != -1)
+		// 	do_mutex_lock_release(pcb[pid-1].mlock_idx);
 		if(pcb[pid-1].mbox_idx != -1)
 			do_mbox_close(pcb[pid-1].mbox_idx);
 		return 1;
 	}
+	return 0;
+}
+
+int do_kill_itself(pid_t shell_pid)
+{
+	for(int i = 0; i < NUM_MAX_TASK; i++){
+		if(pcb[i].status != TASK_EXITED && pcb[i].pid != shell_pid){
+			do_kill(pcb[i].pid);	// kill自身时先kill其他进程
+		}
+	}
+	do_exit();
 	return 0;
 }
 
@@ -187,4 +197,26 @@ int do_waitpid(pid_t pid)
 		return pid;
 	}
 	return 0;
+}
+
+void do_taskset_pid(int mask, pid_t setpid){
+	for(int i = 0; i < NUM_MAX_TASK; i++){
+        if(pcb[i].status != TASK_EXITED && pcb[i].pid == setpid){
+            pcb[i].cpu_mask = mask;
+        	return ;
+        }
+    }
+    printk("WARNING:NO TASK WITH PID %d TO SET MASK %d\n", setpid, mask);
+}
+
+void do_taskset_name(int mask, char *name){
+	pid_t setpid = do_exec(name, 1, (char **)&name);
+	printk("taskset name : %s mask : %d\n", name, mask);
+	for(int i = 0; i < NUM_MAX_TASK; i++){
+        if(pcb[i].status != TASK_EXITED && pcb[i].pid == setpid){
+            pcb[i].cpu_mask = mask;
+        	return ;
+        }
+    }
+    printk("WARNING:NO TASK WITH NAME %s TO SET MASK %d\n", name, mask);
 }

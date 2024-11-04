@@ -36,8 +36,6 @@ static void vt100_hidden_cursor()
 }
 
 /* write a char */
-// 屏幕输出会出现神秘问题？
-// 已解决：分配的栈空间太小
 void screen_putchar(char ch)
 {
 	screen_write_ch(ch);
@@ -57,8 +55,6 @@ void screen_write_ch(char ch)
 	else if (ch == '\b' || ch == '\177')
 	{	
 		// TODO: [P3] support backspace here
-		// 若在正常情况下，通过enter换行会使得上一行的末尾字符为空白
-		// 以下实现也只保证在正常情况下出现预期的效果
 		if(current_running->cursor_x > 0)
 		{
 			current_running->cursor_x--;
