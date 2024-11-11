@@ -1,0 +1,27 @@
+#ifndef __INCLUDE_TASK_H__
+#define __INCLUDE_TASK_H__
+
+#include <type.h>
+#include <os/sched.h>
+
+#define TASK_MEM_BASE    0x52000000
+#define TASK_MAXNUM      NUM_MAX_TASK
+#define TASK_SIZE        0x10000
+
+#define MAXFILENAME 32
+
+#define SECTOR_SIZE 512
+#define NBYTES2SEC(nbytes) (((nbytes) / SECTOR_SIZE) + ((nbytes) % SECTOR_SIZE != 0))
+
+/* TODO: [p1-task4] implement your own task_info_t! */
+typedef struct {
+	uint32_t block_id;
+	uint32_t block_num;
+	uint8_t filename[MAXFILENAME];
+} task_info_t;
+
+extern task_info_t tasks[TASK_MAXNUM];
+
+
+
+#endif
