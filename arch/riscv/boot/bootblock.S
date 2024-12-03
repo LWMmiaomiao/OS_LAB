@@ -11,7 +11,7 @@
 .equ taskinfo_sec_num_loc, 0x502001f6
 
 // kernel address (move kernel to here, and jmp here to start kernel)
-.equ kernel, 0x50201000
+.equ kernel, 0x50202000
 //taskinfo address (add in p1-t4)
 .equ taskinfo, 0x50200200
 

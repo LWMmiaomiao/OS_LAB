@@ -31,6 +31,9 @@ typedef struct {
 	uint32_t block_id;
 	uint32_t block_num;
 	uint8_t filename[MAXFILENAME];
+	uint32_t offset;
+	uint32_t size;
+	uint64_t entrypoint;
 } task_info_t;
 
 #define TASK_MAXNUM 16
@@ -118,6 +121,12 @@ static void create_image(int nfiles, char *files[])
 		// after_addr - before_addr == 某程序所占空间
 		before_addr = phyaddr;
 
+		// add p4
+		if (tidx >= 0) {
+			taskinfo[tidx].offset = phyaddr;
+			taskinfo[tidx].entrypoint = get_entrypoint(ehdr);
+		}
+
 		/* for each program header */
 		for (int ph = 0; ph < ehdr.e_phnum; ph++) {
 
@@ -133,6 +142,12 @@ static void create_image(int nfiles, char *files[])
 			if (strcmp(*files, "main") == 0) {
 				nbytes_kernel += get_filesz(phdr);
 			}
+		}
+
+		// add p4
+		if (tidx >= 0) {
+			taskinfo[tidx].size =
+				phyaddr - taskinfo[tidx].offset;
 		}
 
 		/* write padding bytes */

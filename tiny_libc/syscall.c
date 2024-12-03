@@ -267,10 +267,39 @@ int sys_taskset(int argc, char **argv)
 void* sys_shmpageget(int key)
 {
     /* TODO: [p4-task4] call invoke_syscall to implement sys_shmpageget */
+	return (void *)invoke_syscall(SYSCALL_SHM_GET, (long)key, 0, 0, 0, 0);
 }
 
 void sys_shmpagedt(void *addr)
 {
     /* TODO: [p4-task4] call invoke_syscall to implement sys_shmpagedt */
+	invoke_syscall(SYSCALL_SHM_DT, (long)addr, 0, 0, 0, 0);
 }
+
+int sys_thread_create(int *tidptr, long func, void *arg)
+{
+	return invoke_syscall(SYSCALL_THREAD_CREATE, (long)tidptr, func,
+			      (long)arg, IGNORE, IGNORE);
+}
+
+void sys_thread_yield(pid_t pid)
+{
+	invoke_syscall(SYSCALL_THREAD_YIELD, (long)pid, IGNORE, IGNORE, IGNORE,
+		       IGNORE);
+}
+
+int sys_net_send(void *txpacket, int length)
+{
+    /* TODO: [p5-task1] call invoke_syscall to implement sys_net_send */
+    return invoke_syscall(SYSCALL_NET_SEND, (long)txpacket, (long)length,
+			      0, 0, 0);
+}
+
+int sys_net_recv(void *rxbuffer, int pkt_num, int *pkt_lens)
+{
+    /* TODO: [p5-task2] call invoke_syscall to implement sys_net_recv */
+    return invoke_syscall(SYSCALL_NET_RECV, (long)rxbuffer, (long)pkt_num,
+			      (long)pkt_lens, 0, 0);
+}
+
 /************************************************************/

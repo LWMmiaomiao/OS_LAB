@@ -2,7 +2,7 @@
 # Project Information
 # -----------------------------------------------------------------------
 
-PROJECT_IDX	= 4
+PROJECT_IDX	= 5
 
 # -----------------------------------------------------------------------
 # Host Linux Variables
@@ -33,7 +33,7 @@ MINICOM         = minicom
 # Build/Debug Flags and Variables
 # -----------------------------------------------------------------------
 
-# CFLAGS          = -O0 -fno-builtin -nostdlib -nostdinc -Wall -mcmodel=medany -ggdb3
+# CFLAGS          = -O0 -fno-builtin -nostdlib -nostdinc -Wall -mcmodel=medany -ggdb3 -mabi=lp64
 CFLAGS          = -O2 -fno-builtin -nostdlib -nostdinc -Wall -mcmodel=medany
 
 BOOT_INCLUDE    = -I$(DIR_ARCH)/include
@@ -54,6 +54,8 @@ QEMU_OPTS       = -nographic -machine virt -m 256M -kernel $(UBOOT) -bios none \
                      -D $(QEMU_LOG_FILE) -d oslab
 QEMU_DEBUG_OPT  = -s -S
 QEMU_SMP_OPT	= -smp 2
+QEMU_NET_OPT    = -netdev tap,id=mytap,ifname=tap0,script=${DIR_QEMU}/etc/qemu-ifup,downscript=${DIR_QEMU}/etc/qemu-ifdown \
+                    -device e1000,netdev=mytap
 
 # -----------------------------------------------------------------------
 # UCAS-OS Entrypoints and Variables
@@ -71,7 +73,7 @@ DIR_TEST_PROJ   = $(DIR_TEST)/test_project$(PROJECT_IDX)
 
 BOOTLOADER_ENTRYPOINT   = 0x50200000
 KERNEL_ENTRYPOINT       = 0xffffffc050202000
-USER_ENTRYPOINT         = 0x200000
+USER_ENTRYPOINT         = 0x10000
 
 # -----------------------------------------------------------------------
 # UCAS-OS Kernel Source Files
@@ -103,8 +105,8 @@ SRC_LIBC    = $(wildcard ./tiny_libc/*.c)
 OBJ_LIBC    = $(patsubst %.c, %.o, $(foreach file, $(SRC_LIBC), $(DIR_BUILD)/$(notdir $(file))))
 LIB_TINYC   = $(DIR_BUILD)/libtinyc.a
 
-SRC_SHELL	= $(DIR_TEST)/shell.c
-SRC_USER    = $(SRC_SHELL) $(wildcard $(DIR_TEST_PROJ)/*.c)
+# modified: add init.c
+SRC_USER    =  $(wildcard $(DIR_TEST)/*.c) $(wildcard $(DIR_TEST_PROJ)/*.c)
 ELF_USER    = $(patsubst %.c, %, $(foreach file, $(SRC_USER), $(DIR_BUILD)/$(notdir $(file))))
 
 # -----------------------------------------------------------------------
@@ -118,7 +120,7 @@ ELF_CREATEIMAGE = $(DIR_BUILD)/$(notdir $(SRC_CREATEIMAGE:.c=))
 # Top-level Rules
 # -----------------------------------------------------------------------
 
-all: dirs elf image asm # floppy
+all: dirs elf image extend_image asm # floppy
 
 dirs:
 	@mkdir -p $(DIR_BUILD)
@@ -134,8 +136,9 @@ asm: $(ELF_BOOT) $(ELF_MAIN) $(ELF_USER)
 	for elffile in $^; do $(OBJDUMP) -d $$elffile > $(notdir $$elffile).txt; done
 
 gdb:
-	$(GDB) $(ELF_MAIN) -ex "target remote:1234"
+	$(GDB) $(ELF_MAIN) -ex "target remote:1234" -ex "set tdesc filename $(DIR_OSLAB)/riscv_ucas24.xml"
 
+#	$(GDB) ./test/test_project4/rw -ex "target remote:1234" -ex "set tdesc filename $(DIR_OSLAB)/riscv_ucas24.xml"
 run:
 	$(QEMU) $(QEMU_OPTS)
 
@@ -147,6 +150,10 @@ run-smp:
 
 run-smpc: run-smp cursor
 
+run-net:
+	-@sudo kill `sudo lsof | grep tun | awk '{print $$2}'`
+	sudo $(QEMU) $(QEMU_OPTS) $(QEMU_NET_OPT) $(QEMU_SMP_OPT)
+
 debug:
 	$(QEMU) $(QEMU_OPTS) $(QEMU_DEBUG_OPT)
 
@@ -155,11 +162,19 @@ debug-smp:
 
 cursor:
 	echo -e "\033[?25h" && clear
+	
+debug-net:
+	-@sudo kill `sudo lsof | grep tun | awk '{print $$2}'`
+	sudo $(QEMU) $(QEMU_OPTS) $(QEMU_DEBUG_OPT) $(QEMU_NET_OPT) $(QEMU_SMP_OPT)
+
+viewlog:
+	@if [ ! -e $(QEMU_LOG_FILE) ]; then touch $(QEMU_LOG_FILE); fi;
+	@tail -f $(QEMU_LOG_FILE)
 
 minicom:
-	sudo $(MINICOM) -D $(TTYUSB1)
+	sudo $(MINICOM) -D $(TTYUSB1) -X ./fpga.log
 
-.PHONY: all dirs clean floppy asm gdb run debug viewlog minicom
+.PHONY: all dirs clean floppy asm gdb run debug viewlog minicom run-net debug-net
 
 # -----------------------------------------------------------------------
 # UCAS-OS Rules
@@ -198,6 +213,10 @@ $(ELF_CREATEIMAGE): $(SRC_CREATEIMAGE)
 	$(HOST_CC) $(SRC_CREATEIMAGE) -o $@ -ggdb -Wall
 
 image: $(ELF_CREATEIMAGE) $(ELF_BOOT) $(ELF_MAIN) $(ELF_USER)
-	cd $(DIR_BUILD) && ./$(<F) --extended $(filter-out $(<F), $(^F))
+	cd $(DIR_BUILD) && ./$(<F) --extended $(filter-out $(<F), $(^F)) 
+
+extend_image:
+# 设置swap空间4MB，测试用
+#	dd if=/dev/zero of=$(ELF_IMAGE) oflag=append conv=notrunc bs=4096KB count=1
 
 .PHONY: image

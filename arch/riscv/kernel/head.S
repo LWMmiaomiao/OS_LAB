@@ -6,8 +6,8 @@
 #include <asm.h>
 #include <csr.h>
 
-#define KERNEL_STACK_0		0x504ff000	// in p1: 0x50500000
-#define KERNEL_STACK_1		0x50501000
+#define KERNEL_STACK_0		0xffffffc0504ff000	// in p1: 0x50500000
+#define KERNEL_STACK_1		0xffffffc050501000
 
 .section ".entry_function","ax"
 ENTRY(_start)

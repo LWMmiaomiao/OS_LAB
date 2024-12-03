@@ -17,7 +17,10 @@
 typedef struct {
 	uint32_t block_id;
 	uint32_t block_num;
-	uint8_t filename[MAXFILENAME];
+	char filename[MAXFILENAME];
+	uint32_t offset;
+	uint32_t size;
+	uint64_t entrypoint;
 } task_info_t;
 
 extern task_info_t tasks[TASK_MAXNUM];

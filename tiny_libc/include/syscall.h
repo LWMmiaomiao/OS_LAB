@@ -10,6 +10,8 @@
 #define SYSCALL_GETPID 6
 #define SYSCALL_YIELD 7
 #define SYSCALL_TASKSET 8	// for p3-task4
+#define SYSCALL_THREAD_CREATE 9 // p4 task4
+#define SYSCALL_THREAD_YIELD 10 // p4 task4
 #define SYSCALL_WRITE 20
 #define SYSCALL_READCH 21
 #define SYSCALL_CURSOR 22
@@ -41,5 +43,7 @@
 #define SYSCALL_MBOX_RECV 55
 #define SYSCALL_SHM_GET 56
 #define SYSCALL_SHM_DT 57
+#define SYSCALL_NET_SEND 63
+#define SYSCALL_NET_RECV 64
 
 #endif

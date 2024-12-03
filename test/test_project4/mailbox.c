@@ -205,5 +205,6 @@ int main(int argc, char* argv[])
     send_thread((void*)(unsigned long)id);
 
     pthread_join(recv);
+    printf("mailbox test end!\n");
     return 0;
 }

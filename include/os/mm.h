@@ -26,6 +26,8 @@
 #ifndef MM_H
 #define MM_H
 
+#include <os/list.h>
+#include <os/lock.h>
 #include <type.h>
 #include <pgtable.h>
 
@@ -37,7 +39,7 @@
 #define FREEMEM_KERNEL (INIT_KERNEL_STACK+PAGE_SIZE)
 
 /* Rounding; only works for n = power of two */
-#define ROUND(a, n)     (((((uint64_t)(a))+(n)-1)) & ~((n)-1))
+#define ROUND(a, n)     (((((uint64_t)(a))+(n)-1)) & ~((n)-1)) + PAGE_SIZE
 #define ROUNDDOWN(a, n) (((uint64_t)(a)) & ~((n)-1))
 
 extern ptr_t allocPage(int numPage);
@@ -74,4 +76,47 @@ extern ptr_t allocUserStack(int numPage);
 extern ptr_t kalloc(int byte_num, int flags);
 extern int kfree(ptr_t p);
 
+// add p4 task1
+#define PAGE_NUMS 100
+#define MEM_PAGE_NUMS 28672
+#define SHARE_PAGE_NUMS 16
+
+typedef enum { PINNED, UNPINNED } pg_pin_status_t;
+typedef enum { FREE, ALLOC } pg_status_t;
+
+typedef struct pgcb {
+	ptr_t addr;
+	pg_status_t status;
+	pg_pin_status_t pin;
+
+	int pid;
+	uint64_t vaddr;
+} pgcb_t;
+
+pgcb_t pgcb[PAGE_NUMS];
+
+typedef struct mempgcb {
+	pg_status_t status;
+	int pid;
+	uint64_t vaddr;
+} mempgcb_t;
+
+mempgcb_t mempgcb[MEM_PAGE_NUMS];
+
+typedef struct sharepgcb {
+	int key;
+	int user_num;
+	ptr_t addr;
+} sharepgcb_t;
+
+sharepgcb_t sharepgcb[SHARE_PAGE_NUMS];
+
+int addr2idx(ptr_t addr);
+int idx2sectorIdx(int idx);
+
+ptr_t allocPage_pin(int pid, uint64_t vaddr, pg_pin_status_t pin);
+void freePage_pgcb(pgcb_t *pg);
+
+void initkmem();
+extern uint64_t image_end_sec;
 #endif /* MM_H */

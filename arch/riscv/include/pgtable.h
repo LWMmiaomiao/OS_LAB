@@ -76,42 +76,64 @@ typedef uint64_t PTE;
 static inline uintptr_t kva2pa(uintptr_t kva)
 {
     /* TODO: [P4-task1] */
+    return kva - 0xffffffc000000000lu;
 }
 
 static inline uintptr_t pa2kva(uintptr_t pa)
 {
     /* TODO: [P4-task1] */
+    return pa + 0xffffffc000000000lu;
 }
 
 /* get physical page addr from PTE 'entry' */
 static inline uint64_t get_pa(PTE entry)
 {
     /* TODO: [P4-task1] */
+    return (entry >> _PAGE_PFN_SHIFT) << NORMAL_PAGE_SHIFT;
 }
 
 /* Get/Set page frame number of the `entry` */
 static inline long get_pfn(PTE entry)
 {
     /* TODO: [P4-task1] */
+    return entry >> _PAGE_PFN_SHIFT;
 }
 static inline void set_pfn(PTE *entry, uint64_t pfn)
 {
     /* TODO: [P4-task1] */
+    *entry = *entry ^ ((*entry >> _PAGE_PFN_SHIFT) << _PAGE_PFN_SHIFT) ^
+		 (pfn << _PAGE_PFN_SHIFT);
 }
 
 /* Get/Set attribute(s) of the `entry` */
 static inline long get_attribute(PTE entry, uint64_t mask)
 {
     /* TODO: [P4-task1] */
+    return entry & mask;
 }
 static inline void set_attribute(PTE *entry, uint64_t bits)
 {
     /* TODO: [P4-task1] */
+    *entry = ((*entry >> _PAGE_PFN_SHIFT) << _PAGE_PFN_SHIFT) | bits;
 }
 
 static inline void clear_pgdir(uintptr_t pgdir_addr)
 {
     /* TODO: [P4-task1] */
+    for (uintptr_t i = 0; i < NORMAL_PAGE_SIZE; ++i) {
+		((char *)pgdir_addr)[i] = 0;
+	}
+}
+
+/* 
+ * query the page table stored in pgdir_va to obtain the physical 
+ * address corresponding to the virtual address va.
+ * 
+ * return the kernel virtual address of the physical address 
+ */
+static inline uintptr_t get_kva_of(uintptr_t va, uintptr_t pgdir_va)
+{
+    // TODO: [P4-task1] (todo if you need)
 }
 
 #endif  // PGTABLE_H

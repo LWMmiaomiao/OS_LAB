@@ -20,12 +20,15 @@
 #include <assert.h>
 #include <type.h>
 #include <csr.h>
+#include <os/page.h>
+#include <pgtable.h>
+#include <e1000.h>
 
 extern void ret_from_trap();
 
 // Task info array
 task_info_t tasks[TASK_MAXNUM];
-
+uint64_t image_end_sec;
 // char buf[50];
 
 // int tasknum;
@@ -60,95 +63,96 @@ static void init_task_info(void)
 {
 	// TODO: [p1-task4] Init 'tasks' array via reading app-info sector
 	// NOTE: You need to get some related arguments from bootblock first
-	task_info_t * taskinfo_ptr = (task_info_t *)0x50200200;
+	task_info_t * taskinfo_ptr = (task_info_t *)0xffffffc050200200;
 	for(int i = 0; i < TASK_MAXNUM; i++, taskinfo_ptr++)
 		tasks[i] = *taskinfo_ptr;
 	// tasknum = *((int *)0x502001fe);
-
+	for(int i = 0; i < TASK_MAXNUM && tasks[i].filename[0]!='\0'; i++)
+		image_end_sec = NBYTES2SEC(tasks[i].offset + tasks[i].size) + 1;
 }
 
 
 /************************************************************/
-static void init_pcb_stack(
-    ptr_t kernel_stack, ptr_t user_stack, ptr_t entry_point,
-    pcb_t *pcb, int argc, char **argv)
-{
-	// P3, pass parameter to the user stack
-	ptr_t argv_base;
-	ptr_t usp;
-	argv_base = user_stack - sizeof(char *) * argc;
-	user_stack = argv_base;
-	usp = argv_base;
-	for(int i = 0; i < argc; i++)
-	{
-		user_stack = user_stack - (strlen(argv[i]) + 1);
-		strcpy((char *)user_stack,argv[i]);
-		memcpy((uint8_t *)usp, (const uint8_t *)&user_stack, sizeof(char *));
-		usp += sizeof(char *);
-	}
-	user_stack = user_stack & 0xffffffffffffff80;
+// static void init_pcb_stack(
+//     ptr_t kernel_stack, ptr_t user_stack, ptr_t entry_point,
+//     pcb_t *pcb, int argc, char **argv)
+// {
+// 	// P3, pass parameter to the user stack
+// 	ptr_t argv_base;
+// 	ptr_t usp;
+// 	argv_base = user_stack - sizeof(char *) * argc;
+// 	user_stack = argv_base;
+// 	usp = argv_base;
+// 	for(int i = 0; i < argc; i++)
+// 	{
+// 		user_stack = user_stack - (strlen(argv[i]) + 1);
+// 		strcpy((char *)user_stack,argv[i]);
+// 		memcpy((uint8_t *)usp, (const uint8_t *)&user_stack, sizeof(char *));
+// 		usp += sizeof(char *);
+// 	}
+// 	user_stack = user_stack & 0xffffffffffffff80;
 
-	/* TODO: [p2-task3] initialization of registers on kernel stack
-	* HINT: sp, ra, sepc, sstatus
-	* NOTE: To run the task in user mode, you should set corresponding bits
-	*     of sstatus(SPP, SPIE, etc.).
-	*/
-	regs_context_t *pt_regs = (regs_context_t *)(kernel_stack - sizeof(regs_context_t));
+// 	/* TODO: [p2-task3] initialization of registers on kernel stack
+// 	* HINT: sp, ra, sepc, sstatus
+// 	* NOTE: To run the task in user mode, you should set corresponding bits
+// 	*     of sstatus(SPP, SPIE, etc.).
+// 	*/
+// 	regs_context_t *pt_regs = (regs_context_t *)(kernel_stack - sizeof(regs_context_t));
 	
-	pt_regs->sstatus = SR_SPIE;		// return U-mode(SPP == 0) and enable interrupt gloablly(SPIE == 1)
-	pt_regs->sepc = entry_point;		// jump to entrypoint using sret
-	pt_regs->regs[SP] = user_stack;
-	pt_regs->regs[TP] = (reg_t)pcb;
-	pt_regs->regs[A0] = (reg_t)argc;
-	pt_regs->regs[A1] = (reg_t)argv_base;
+// 	pt_regs->sstatus = SR_SPIE;		// return U-mode(SPP == 0) and enable interrupt gloablly(SPIE == 1)
+// 	pt_regs->sepc = entry_point;		// jump to entrypoint using sret
+// 	pt_regs->regs[SP] = user_stack;
+// 	pt_regs->regs[TP] = (reg_t)pcb;
+// 	pt_regs->regs[A0] = (reg_t)argc;
+// 	pt_regs->regs[A1] = (reg_t)argv_base;
 
 
-	/* TODO: [p2-task1] set sp to simulate just returning from switch_to
-	* NOTE: you should prepare a stack, and push some values to
-	* simulate a callee-saved context.
-	*/
-	switchto_context_t *pt_switchto = (switchto_context_t *)((ptr_t)pt_regs - sizeof(switchto_context_t));
+// 	/* TODO: [p2-task1] set sp to simulate just returning from switch_to
+// 	* NOTE: you should prepare a stack, and push some values to
+// 	* simulate a callee-saved context.
+// 	*/
+// 	switchto_context_t *pt_switchto = (switchto_context_t *)((ptr_t)pt_regs - sizeof(switchto_context_t));
 
-	pcb->kernel_sp = (reg_t)pt_switchto;
-	pcb->user_sp = (reg_t)user_stack;
+// 	pcb->kernel_sp = (reg_t)pt_switchto;
+// 	pcb->user_sp = (reg_t)user_stack;
 
-	// for user process, jump to entrypoint by using sret
-	pt_switchto->regs[0] = (reg_t)ret_from_trap;
-	pt_switchto->regs[1] = pcb->kernel_sp;
-	pt_switchto->regs[2] = 0;
-	pt_switchto->regs[3] = 0;
-	pt_switchto->regs[4] = 0;
-	pt_switchto->regs[5] = 0;
-	pt_switchto->regs[6] = 0;
-	pt_switchto->regs[7] = 0;
-	pt_switchto->regs[8] = 0;
-	pt_switchto->regs[9] = 0;
-	pt_switchto->regs[10] = 0;
-	pt_switchto->regs[11] = 0;
-	pt_switchto->regs[12] = 0;
-	pt_switchto->regs[13] = 0;
-
-
-}
+// 	// for user process, jump to entrypoint by using sret
+// 	pt_switchto->regs[0] = (reg_t)ret_from_trap;
+// 	pt_switchto->regs[1] = pcb->kernel_sp;
+// 	pt_switchto->regs[2] = 0;
+// 	pt_switchto->regs[3] = 0;
+// 	pt_switchto->regs[4] = 0;
+// 	pt_switchto->regs[5] = 0;
+// 	pt_switchto->regs[6] = 0;
+// 	pt_switchto->regs[7] = 0;
+// 	pt_switchto->regs[8] = 0;
+// 	pt_switchto->regs[9] = 0;
+// 	pt_switchto->regs[10] = 0;
+// 	pt_switchto->regs[11] = 0;
+// 	pt_switchto->regs[12] = 0;
+// 	pt_switchto->regs[13] = 0;
 
 
+// }
 
-int add_new_task(char * str, int argc, char *argv[], int pid)
-{
-	ptr_t entrypoint;
-	ptr_t kernel_stack,usr_stack;
 
-	if((entrypoint = load_task_img_by_name(str)) != 0)
-	{
-		kernel_stack = allocKernelStack(1);
-		usr_stack = allocUserStack(4);
-		init_pcb_stack(kernel_stack, usr_stack, entrypoint, &pcb[pid-1],argc,argv);
-		pcb[pid-1].status = TASK_READY;
-		return 0;
-	}
-	else  
-		return -1;
-}
+
+// int add_new_task(char * str, int argc, char *argv[], int pid)
+// {
+// 	ptr_t entrypoint;
+// 	ptr_t kernel_stack,usr_stack;
+
+// 	if((entrypoint = load_task_img_by_name(str)) != 0)
+// 	{
+// 		kernel_stack = allocKernelStack(1);
+// 		usr_stack = allocUserStack(4);
+// 		init_pcb_stack(kernel_stack, usr_stack, entrypoint, &pcb[pid-1],argc,argv);
+// 		pcb[pid-1].status = TASK_READY;
+// 		return 0;
+// 	}
+// 	else  
+// 		return -1;
+// }
 
 
 static void init_pcb(void)
@@ -167,15 +171,26 @@ static void init_pcb(void)
 		pcb[i].wait_list.prev = &pcb[i].wait_list;
 		pcb[i].status = TASK_EXITED;			// useless?
 		pcb[i].current_core_id = NO_CORE;
+
+		pcb[i].kernel_stack_base = allocPage_pin(0, 0, PINNED);
+		pcb[i].user_stack_base = 0xf0000f000;
+		pcb[i].pagedir = NULL;
+		pcb[i].next_stack_base = pcb[i].user_stack_base + 2 * PAGE_SIZE;
 	}
 
 	/* TODO: [p2-task1] remember to initialize 'current_running' */
 
-	pid0_pcb[current_cpuid].status = TASK_RUNNING;
-	pid0_pcb[current_cpuid].current_core_id = CORE_ZERO;
+	pid0_pcb[0].status = TASK_RUNNING;
+	pid0_pcb[0].current_core_id = CORE_ZERO;
 	current_running = &pid0_pcb[current_cpuid];		// current running is kernel
 	process_id[current_cpuid] = pid0_pcb[current_cpuid].pid;
 
+	pid0_pcb[0].kernel_sp = allocPage_pin(0, 0, PINNED) + PAGE_SIZE;
+	pid0_pcb[0].user_sp = pid0_pcb[0].kernel_sp;
+	pid0_pcb[0].pagedir = initPgtable(0);
+	pid0_pcb[1].kernel_sp = allocPage_pin(0, 0, PINNED) + PAGE_SIZE;
+	pid0_pcb[1].user_sp = pid0_pcb[1].kernel_sp;
+	pid0_pcb[1].pagedir = initPgtable(0);
 
 	// load shell
 	int shell_argc = 2;
@@ -221,6 +236,10 @@ static void init_syscall(void)
 	syscall[SYSCALL_MBOX_CLOSE]	= (long (*)())do_mbox_close;
 	syscall[SYSCALL_MBOX_SEND]	= (long (*)())do_mbox_send;
 	syscall[SYSCALL_MBOX_RECV]	= (long (*)())do_mbox_recv;
+	syscall[SYSCALL_THREAD_CREATE] = (long (*)())thread_create; // p4 task4
+	syscall[SYSCALL_THREAD_YIELD] = (long (*)())do_waitpid;
+	syscall[SYSCALL_SHM_GET] = (long (*)())shm_page_get; // p4 task5
+	syscall[SYSCALL_SHM_DT] = (long (*)())shm_page_dt;
 }
 
 /************************************************************/
@@ -249,13 +268,25 @@ int main(void)
 		// Output 'Hello OS!'
 		bios_putstr("Hello OS!\n\r");
 		
+		// Init Physical memory allocator
+		initkmem();
+		bios_putstr("[INIT] Memory initialization succeeded.\n\r");
 
 		// Init Process Control Blocks |•'-'•) ✧
 		init_pcb();
 		printk("> [INIT] PCB initialization succeeded.\n");
 
-		// Read CPU frequency (｡•ᴗ-)_
+		// Read Flatten Device Tree (｡•ᴗ-)_
 		time_base = bios_read_fdt(TIMEBASE);
+		e1000 = (volatile uint8_t *)bios_read_fdt(ETHERNET_ADDR);
+		uint64_t plic_addr = bios_read_fdt(PLIC_ADDR);
+		uint32_t nr_irqs = (uint32_t)bios_read_fdt(NR_IRQS);
+		printk("> [INIT] e1000: %lx, plic_addr: %lx, nr_irqs: %lx.\n", e1000, plic_addr, nr_irqs);
+		
+		// IOremap
+		plic_addr = (uintptr_t)ioremap((uint64_t)plic_addr, 0x4000 * NORMAL_PAGE_SIZE);
+		e1000 = (uint8_t *)ioremap((uint64_t)e1000, 8 * NORMAL_PAGE_SIZE);
+		printk("> [INIT] IOremap initialization succeeded.\n");
 
 		// Init lock mechanism o(´^｀)o
 		init_ipc();
@@ -269,20 +300,20 @@ int main(void)
 		init_syscall();
 		printk("> [INIT] System call initialized successfully.\n");
 
-    // Init screen (QAQ)
-    init_screen();
-    printk("> [INIT] SCREEN initialization succeeded.\n");
+		// Init screen (QAQ)
+		init_screen();
+		printk("> [INIT] SCREEN initialization succeeded.\n");
 
-    /*
-     * Just start kernel with VM and print this string
-     * in the first part of task 1 of project 4.
-     * NOTE: if you use SMP, then every CPU core should call
-     *  `kernel_brake()` to stop executing!
-     */
-    printk("> [INIT] CPU #%u has entered kernel with VM!\n",
-        (unsigned int)get_current_cpu_id());
-    // TODO: [p4-task1 cont.] remove the brake and continue to start user processes.
-    kernel_brake();
+		/*
+		* Just start kernel with VM and print this string
+		* in the first part of task 1 of project 4.
+		* NOTE: if you use SMP, then every CPU core should call
+		*  `kernel_brake()` to stop executing!
+		*/
+		printk("> [INIT] CPU #%u has entered kernel with VM!\n",
+			(unsigned int)get_current_cpu_id());
+		// TODO: [p4-task1 cont.] remove the brake and continue to start user processes.
+		// kernel_brake();
 
 		wakeup_other_hart();
 
@@ -292,6 +323,7 @@ int main(void)
 	else
 	{
 		smp_init();
+		unmapBoot();
 		printl("core 1\n");
 	}
 

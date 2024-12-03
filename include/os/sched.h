@@ -33,8 +33,10 @@
 #include <os/list.h>
 #include <os/smp.h>
 #include <os/lock.h>
+#include <pgtable.h>
 
-#define NUM_MAX_TASK 16
+// #define NUM_MAX_TASK 16
+#define NUM_MAX_TASK 64
 
 #define FIND_PCB(name) ((pcb_t *)(name->pcb_ptr))	// find pcb
 
@@ -104,7 +106,12 @@ typedef struct pcb
 	int mlock_table[LOCK_NUM];
 	int mbox_table[MBOX_NUM];
 
-} pcb_t;
+	/* page dir */
+	PTE *pagedir;
+
+	ptr_t next_stack_base;
+
+} pcb_t, tcb_t;
 
 /* ready queue to run */
 extern list_head ready_queue;
@@ -141,4 +148,9 @@ extern void do_process_show();
 extern pid_t do_getpid();
 /************************************************************/
 
+// add p4 task1
+pcb_t *pid2pcb(int pid);
+void init_pcb_stack(ptr_t kernel_stack, ptr_t user_stack, ptr_t entry_point,
+		    pcb_t *pcb, int argc, char *argv[]);
+int thread_create(int *tidptr, long func, void *arg);
 #endif
