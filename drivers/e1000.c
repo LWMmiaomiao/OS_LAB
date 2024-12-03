@@ -55,11 +55,8 @@ static void e1000_reset(void)
 static void e1000_configure_tx(void)
 {
     /* TODO: [p5-task1] Initialize tx descriptors */
-
     /* TODO: [p5-task1] Set up the Tx descriptor base address and length */
-
 	/* TODO: [p5-task1] Set up the HW Tx Head and Tail descriptor pointers */
-
     /* TODO: [p5-task1] Program the Transmit Control Register */
 }
 
