@@ -84,5 +84,5 @@ stop:
 
 .data
 
-msg: .string "It's hululu's bootloader...\n\r"
+msg: .string "It's GZY's bootloader...\n\r"
 

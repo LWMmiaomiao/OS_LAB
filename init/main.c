@@ -23,6 +23,8 @@
 #include <os/page.h>
 #include <pgtable.h>
 #include <e1000.h>
+#include <os/net.h>
+#include <os/ioremap.h>
 
 extern void ret_from_trap();
 
@@ -240,6 +242,9 @@ static void init_syscall(void)
 	syscall[SYSCALL_THREAD_YIELD] = (long (*)())do_waitpid;
 	syscall[SYSCALL_SHM_GET] = (long (*)())shm_page_get; // p4 task5
 	syscall[SYSCALL_SHM_DT] = (long (*)())shm_page_dt;
+	syscall[SYSCALL_NET_SEND] = (long (*)())do_net_send;
+	syscall[SYSCALL_NET_RECV] = (long (*)())do_net_recv;
+
 }
 
 /************************************************************/

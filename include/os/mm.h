@@ -77,7 +77,7 @@ extern ptr_t kalloc(int byte_num, int flags);
 extern int kfree(ptr_t p);
 
 // add p4 task1
-#define PAGE_NUMS 100
+#define PAGE_NUMS 28672
 #define MEM_PAGE_NUMS 28672
 #define SHARE_PAGE_NUMS 16
 

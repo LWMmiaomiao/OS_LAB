@@ -50,7 +50,7 @@ int main()
 		bp_putchar('\n');
 		bp_putchar('\r');
 	}
-	bp_putstr("Xianan Zhu\n\r");
+	bp_putstr("GZYn\r");
 	
 	return 0;
 }

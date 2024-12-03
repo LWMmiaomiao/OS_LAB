@@ -48,7 +48,10 @@ static void e1000_reset(void)
     /* Clear any pending interrupt events. */
     while (0 != e1000_read_reg(e1000, E1000_ICR)) ;
 }
-
+uint64_t lowbit(uint64_t x)
+{
+	return x & (-x);
+}
 /**
  * e1000_configure_tx - Configure 8254x Transmit Unit after Reset
  **/

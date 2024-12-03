@@ -134,6 +134,7 @@ static inline void clear_pgdir(uintptr_t pgdir_addr)
 static inline uintptr_t get_kva_of(uintptr_t va, uintptr_t pgdir_va)
 {
     // TODO: [P4-task1] (todo if you need)
+    return 0;
 }
 
 #endif  // PGTABLE_H
